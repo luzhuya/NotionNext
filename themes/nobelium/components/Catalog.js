@@ -3,86 +3,62 @@ import { uuidToId } from 'notion-utils'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 /**
- * 目录导航组件
- * @param toc
- * @returns {JSX.Element}
- * @constructor
+ * 目录导航组件 (少数派风格)
  */
-const Catalog = ({ toc }) => {
-  // 监听滚动事件
-  useEffect(() => {
-    window.addEventListener('scroll', actionSectionScrollSpy)
-    actionSectionScrollSpy()
-    return () => {
-      window.removeEventListener('scroll', actionSectionScrollSpy)
-    }
-  }, [])
-
-  // 目录自动滚动
+const Catalog = ({ toc, showTOC }) => {
   const tRef = useRef(null)
   const tocIds = []
-
-  // 同步选中目录事件
   const [activeSection, setActiveSection] = useState(null)
-  const throttleMs = 200
+
   const actionSectionScrollSpy = useCallback(
     throttle(() => {
       const sections = document.getElementsByClassName('notion-h')
-      let prevBBox = null
       let currentSectionId = activeSection
       for (let i = 0; i < sections.length; ++i) {
         const section = sections[i]
         if (!section || !(section instanceof Element)) continue
-        if (!currentSectionId) {
-          currentSectionId = section.getAttribute('data-id')
-        }
         const bbox = section.getBoundingClientRect()
-        const prevHeight = prevBBox ? bbox.top - prevBBox.bottom : 0
-        const offset = Math.max(150, prevHeight / 4)
-        // GetBoundingClientRect returns values relative to viewport
-        if (bbox.top - offset < 0) {
+        if (bbox.top - 150 < 0) {
           currentSectionId = section.getAttribute('data-id')
-          prevBBox = bbox
           continue
         }
-        // No need to continue loop, if last element has been detected
         break
       }
       setActiveSection(currentSectionId)
-      const index = tocIds.indexOf(currentSectionId) || 0
-      tRef?.current?.scrollTo({ top: 28 * index, behavior: 'smooth' })
-    }, throttleMs)
+    }, 200)
   )
 
-  // 无目录就直接返回空
-  if (!toc || toc.length < 1) {
-    return <></>
-  }
+  useEffect(() => {
+    window.addEventListener('scroll', actionSectionScrollSpy)
+    actionSectionScrollSpy()
+    return () => window.removeEventListener('scroll', actionSectionScrollSpy)
+  }, [])
+
+  if (!toc || toc.length < 1) return <></>
 
   return (
-    <div className='hidden lg:block absolute right-0 top-0 -mr-96 h-full'>
-      <div className='px-3 sticky top-32'>
-        <div
-          className='pl-10 mt-32 overflow-y-auto max-w-96  max-h-96 overscroll-none scroll-hidden'
-          ref={tRef}>
-          <nav className='h-full text-black dark:text-gray-300'>
+    /* 基于屏幕中心线偏移的定位 
+      xl:left-[calc(50%+20rem)] 代表屏幕中线往右偏 20rem (约320px)
+    */
+    <div className={`hidden xl:block fixed top-40 w-64 h-full transition-all duration-500 z-10 
+      xl:left-[calc(50%+20rem)]
+      ${showTOC ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-10 pointer-events-none'}`}>
+      
+      <div className='px-4 border-l border-gray-100 dark:border-gray-800 text-left'>
+        <div className='text-[10px] uppercase text-gray-400 mb-4 font-bold tracking-widest'>Table of Contents</div>
+        <div className='overflow-y-auto max-h-[65vh] scroll-hidden' ref={tRef}>
+          <nav className='space-y-3'>
             {toc?.map(tocItem => {
               const id = uuidToId(tocItem.id)
-              tocIds.push(id)
+              const isActive = activeSection === id
               return (
                 <a
                   key={id}
                   href={`#${id}`}
-                  className={`${activeSection === id && 'dark:border-white border-gray-800 text-gray-800 font-bold'} hover:font-semibold border-l pl-4 block hover:text-gray-800 border-lduration-300 transform dark:text-gray-400 dark:border-gray-400
-              notion-table-of-contents-item-indent-level-${tocItem.indentLevel} catalog-item `}>
-                  <span
-                    style={{
-                      display: 'inline-block',
-                      marginLeft: tocItem.indentLevel * 16
-                    }}
-                    className={`truncate ${activeSection === id ? ' font-bold text-black dark:text-white underline' : ''}`}>
-                    {tocItem.text}
-                  </span>
+                  className={`block transition-all duration-300 text-sm hover:text-black dark:hover:text-white
+                    ${isActive ? 'text-black dark:text-white font-bold translate-x-1' : 'text-gray-400'}`}
+                  style={{ marginLeft: tocItem.indentLevel * 12 }}>
+                  <span className="truncate block">{tocItem.text}</span>
                 </a>
               )
             })}
