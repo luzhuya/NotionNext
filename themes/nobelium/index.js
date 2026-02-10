@@ -37,32 +37,36 @@ const ThemeGlobalNobelium = createContext()
 export const useNobeliumGlobal = () => useContext(ThemeGlobalNobelium)
 
 /**
- * 基础布局 采用左右两侧布局，移动端使用顶部导航栏
-
- * @returns {JSX.Element}
- * @constructor
+ * 基础布局
  */
 const LayoutBase = props => {
   const { children, post } = props
   const fullWidth = post?.fullWidth ?? false
   const { onLoading } = useGlobal()
   const searchModal = useRef(null)
-  // 在列表中进行实时过滤
   const [filterKey, setFilterKey] = useState('')
   const topSlot = <BlogListBar {...props} />
+
+  // --- 少数派风格：滚动显隐目录状态 ---
+  const [showTOC, setShowTOC] = useState(false)
+  useEffect(() => {
+    const handleScroll = () => {
+      setShowTOC(window.scrollY > 400)
+    }
+    window.addEventListener('scroll', handleScroll)
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [])
 
   return (
     <ThemeGlobalNobelium.Provider
       value={{ searchModal, filterKey, setFilterKey }}>
       <div
         id='theme-nobelium'
-        className={`${siteConfig('FONT_STYLE')} nobelium relative dark:text-gray-300  w-full  bg-white dark:bg-black min-h-screen flex flex-col scroll-smooth`}>
+        className={`${siteConfig('FONT_STYLE')} nobelium relative dark:text-gray-300 w-full bg-white dark:bg-black min-h-screen flex flex-col scroll-smooth`}>
         <Style />
 
-        {/* 顶部导航栏 */}
         <Nav {...props} />
 
-        {/* 主区 */}
         <main
           id='out-wrapper'
           className={`relative m-auto flex-grow w-full transition-all ${!fullWidth ? 'max-w-2xl px-4' : 'px-4 md:px-24'}`}>
@@ -76,48 +80,33 @@ const LayoutBase = props => {
             leaveFrom='opacity-100 translate-y-0'
             leaveTo='opacity-0 -translate-y-16'
             unmount={false}>
-            {/* 顶部插槽 */}
             {topSlot}
             {children}
-            {post && <Catalog toc={post?.toc} />}
+            {/* 注入显隐状态 */}
+            {post && <Catalog toc={post?.toc} showTOC={showTOC} />}
           </Transition>
         </main>
 
-        {/* 页脚 */}
         <Footer {...props} />
 
-        {/* 右下悬浮 */}
         <div className='fixed right-4 bottom-4'>
           <JumpToTopButton />
         </div>
 
-        {/* 左下悬浮 */}
         <div className='bottom-4 -left-14 fixed justify-end z-40'>
           <Live2D />
         </div>
 
-        {/* 搜索框 */}
         <AlgoliaSearchModal cRef={searchModal} {...props} />
       </div>
     </ThemeGlobalNobelium.Provider>
   )
 }
 
-/**
- * 首页
- * 首页是个博客列表，加上顶部嵌入一个公告
- * @param {*} props
- * @returns
- */
 const LayoutIndex = props => {
   return <LayoutPostList {...props} topSlot={<Announcement {...props} />} />
 }
 
-/**
- * 博客列表
- * @param {*} props
- * @returns
- */
 const LayoutPostList = props => {
   const { posts, topSlot, tag } = props
   const { filterKey } = useNobeliumGlobal()
@@ -145,12 +134,6 @@ const LayoutPostList = props => {
   )
 }
 
-/**
- * 搜索
- * 页面是博客列表，上方嵌入一个搜索引导条
- * @param {*} props
- * @returns
- */
 const LayoutSearch = props => {
   const { keyword, posts } = props
   useEffect(() => {
@@ -166,7 +149,6 @@ const LayoutSearch = props => {
     }
   }, [])
 
-  // 在列表中进行实时过滤
   const { filterKey } = useNobeliumGlobal()
   let filteredBlogPosts = []
   if (filterKey && posts) {
@@ -191,16 +173,11 @@ const LayoutSearch = props => {
   )
 }
 
-/**
- * 归档
- * @param {*} props
- * @returns
- */
 const LayoutArchive = props => {
   const { archivePosts } = props
   return (
     <>
-      <div className='mb-10 pb-20 md:py-12 p-3  min-h-screen w-full'>
+      <div className='mb-10 pb-20 md:py-12 p-3 min-h-screen w-full'>
         {Object.keys(archivePosts).map(archiveTitle => (
           <BlogArchiveItem
             key={archiveTitle}
@@ -213,69 +190,47 @@ const LayoutArchive = props => {
   )
 }
 
-/**
- * 文章详情
- * @param {*} props
- * @returns
- */
 const LayoutSlug = props => {
   const { post, lock, validPassword } = props
   const router = useRouter()
   const waiting404 = siteConfig('POST_WAITING_TIME_FOR_404') * 1000
   useEffect(() => {
-    // 404
     if (!post) {
-      setTimeout(
-        () => {
-          if (isBrowser) {
-            const article = document.querySelector('#article-wrapper #notion-article')
-            if (!article) {
-              router.push('/404').then(() => {
-                console.warn('找不到页面', router.asPath)
-              })
-            }
+      setTimeout(() => {
+        if (isBrowser) {
+          const article = document.querySelector('#article-wrapper #notion-article')
+          if (!article) {
+            router.push('/404')
           }
-        },
-        waiting404
-      )
+        }
+      }, waiting404)
     }
   }, [post])
   return (
     <>
       {lock && <ArticleLock validPassword={validPassword} />}
-
       {!lock && post && (
         <div className='px-2'>
-          <>
-            <ArticleInfo post={post} />
-            <div id='article-wrapper'>
-              <NotionPage post={post} />
-            </div>
-            <ShareBar post={post} />
-            <Comment frontMatter={post} />
-            <ArticleFooter />
-          </>
+          <ArticleInfo post={post} />
+          <div id='article-wrapper'>
+            <NotionPage post={post} />
+          </div>
+          <ShareBar post={post} />
+          <Comment frontMatter={post} />
+          <ArticleFooter />
         </div>
       )}
     </>
   )
 }
 
-/**
- * 404 页面
- * @param {*} props
- * @returns
- */
 const Layout404 = props => {
   const router = useRouter()
   useEffect(() => {
-    // 延时3秒如果加载失败就返回首页
     setTimeout(() => {
       const article = isBrowser && document.getElementById('article-wrapper')
       if (!article) {
-        router.push('/').then(() => {
-          // console.log('找不到页面', router.asPath)
-        })
+        router.push('/')
       }
     }, 3000)
   }, [])
@@ -292,81 +247,39 @@ const Layout404 = props => {
     </>
 }
 
-/**
- * 文章分类列表
- * @param {*} props
- * @returns
- */
 const LayoutCategoryIndex = props => {
   const { categoryOptions } = props
-
   return (
-    <>
-      <div id='category-list' className='duration-200 flex flex-wrap'>
-        {categoryOptions?.map(category => {
-          return (
-            <SmartLink
-              key={category.name}
-              href={`/category/${category.name}`}
-              passHref
-              legacyBehavior>
-              <div
-                className={
-                  'hover:text-black dark:hover:text-white dark:text-gray-300 dark:hover:bg-gray-600 px-5 cursor-pointer py-2 hover:bg-gray-100'
-                }>
-                <i className='mr-4 fas fa-folder' />
-                {category.name}({category.count})
-              </div>
-            </SmartLink>
-          )
-        })}
-      </div>
-    </>
+    <div id='category-list' className='duration-200 flex flex-wrap'>
+      {categoryOptions?.map(category => (
+        <SmartLink key={category.name} href={`/category/${category.name}`} passHref legacyBehavior>
+          <div className='hover:text-black dark:hover:text-white dark:text-gray-300 dark:hover:bg-gray-600 px-5 cursor-pointer py-2 hover:bg-gray-100'>
+            <i className='mr-4 fas fa-folder' />
+            {category.name}({category.count})
+          </div>
+        </SmartLink>
+      ))}
+    </div>
   )
 }
 
-/**
- * 文章标签列表
- * @param {*} props
- * @returns
- */
 const LayoutTagIndex = props => {
   const { tagOptions } = props
   return (
-    <>
-      <div>
-        <div id='tags-list' className='duration-200 flex flex-wrap'>
-          {tagOptions.map(tag => {
-            return (
-              <div key={tag.name} className='p-2'>
-                <SmartLink
-                  key={tag}
-                  href={`/tag/${encodeURIComponent(tag.name)}`}
-                  passHref
-                  className={`cursor-pointer inline-block rounded hover:bg-gray-500 hover:text-white duration-200 mr-2 py-1 px-2 text-xs whitespace-nowrap dark:hover:text-white text-gray-600 hover:shadow-xl dark:border-gray-400 notion-${tag.color}_background dark:bg-gray-800`}>
-                  <div className='font-light dark:text-gray-400'>
-                    <i className='mr-1 fas fa-tag' />{' '}
-                    {tag.name + (tag.count ? `(${tag.count})` : '')}{' '}
-                  </div>
-                </SmartLink>
-              </div>
-            )
-          })}
+    <div id='tags-list' className='duration-200 flex flex-wrap'>
+      {tagOptions.map(tag => (
+        <div key={tag.name} className='p-2'>
+          <SmartLink href={`/tag/${encodeURIComponent(tag.name)}`} passHref className={`cursor-pointer inline-block rounded hover:bg-gray-500 hover:text-white duration-200 mr-2 py-1 px-2 text-xs whitespace-nowrap dark:hover:text-white text-gray-600 hover:shadow-xl dark:border-gray-400 notion-${tag.color}_background dark:bg-gray-800`}>
+            <div className='font-light dark:text-gray-400'>
+              <i className='mr-1 fas fa-tag' /> {tag.name + (tag.count ? `(${tag.count})` : '')}
+            </div>
+          </SmartLink>
         </div>
-      </div>
-    </>
+      ))}
+    </div>
   )
 }
 
 export {
-  Layout404,
-  LayoutArchive,
-  LayoutBase,
-  LayoutCategoryIndex,
-  LayoutIndex,
-  LayoutPostList,
-  LayoutSearch,
-  LayoutSlug,
-  LayoutTagIndex,
-  CONFIG as THEME_CONFIG
+  Layout404, LayoutArchive, LayoutBase, LayoutCategoryIndex, LayoutIndex, LayoutPostList, LayoutSearch, LayoutSlug, LayoutTagIndex, CONFIG as THEME_CONFIG
 }
